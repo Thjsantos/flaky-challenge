@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/dotnet:v1.49.0-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: bash scripts/inside.sh -v n 2>&1 | tee test.log
+        shell: bash {0}
+
+      - name: Test summary
+        if: always()
+        shell: bash {0}
+        run: |
+          passed=$(grep -cE '^\s+Passed Tests\.' test.log)
+          failed=$(grep -cE '^\s+Failed Tests\.' test.log)
+          {
+            echo "## Test results"
+            echo
+            echo "**Passed: $passed · Failed: $failed**"
+            echo
+            echo "| Result | Test |"
+            echo "|---|---|"
+            grep -E '^\s+(Passed|Failed) Tests\.' test.log | sed -E 's/ \[.*\]//' | sort -u \
+              | sed -E 's/^\s+Passed (.*)$/| ✅ Passed | \1 |/; s/^\s+Failed (.*)$/| ❌ Failed | \1 |/'
+            echo
+            echo "Image: mcr.microsoft.com/playwright/dotnet:v1.49.0-noble"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
