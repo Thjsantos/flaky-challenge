@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{margin:0;background:#f6f4ef;font-family:Segoe UI,Arial,sans-serif;color:#1d1b17;width:1200px}
+header{background:#1d1b17;color:#f6f4ef;padding:28px 40px}header h1{margin:0;font-size:30px}header p{margin:6px 0 0;color:#cfc8b8;font-size:15px}
+main{padding:28px 40px 36px}h2{font-size:19px;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid #c9622b;color:#8a3d12}h2:first-child{margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:14px}th{background:#e9e4d8;text-align:left;padding:8px 10px}td{padding:7px 10px;border-bottom:1px solid #ddd6c6;vertical-align:top}
+code,pre{font-family:Consolas,monospace}code{background:#ebe6d9;padding:1px 5px;border-radius:3px;font-size:13px}
+.bad{color:#a32020}.good{color:#1f7a3a}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+pre{margin:0;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap}
+.pb{background:#2b1717;color:#f3c9c9}.pg{background:#15261b;color:#c9f0d6}.pd{background:#1d1b17;color:#f6f4ef}
+.lbl{font-weight:700;font-size:13px;margin-bottom:5px}.note{font-size:13px;color:#4a463d;margin-top:8px}
+</style></head><body>
+<header><h1>Avoiding flaky tests: Playwright + C#</h1><p>Rule of thumb: never read the page once and hope it is ready. Let Playwright wait for the condition.</p></header>
+<main>
+<h2>1. Methods to use</h2>
+<table>
+<tr><th style="width:36%">Need</th><th>Use</th></tr>
+<tr><td>Element count / visible / hidden</td><td><code>Expect(loc).ToHaveCountAsync(n)</code> · <code>ToBeVisibleAsync()</code> · <code>ToBeHiddenAsync()</code></td></tr>
+<tr><td>Text, attribute, state</td><td><code>ToHaveTextAsync</code> · <code>ToContainTextAsync</code> · <code>ToHaveAttributeAsync</code> · <code>ToBeEnabledAsync</code></td></tr>
+<tr><td>Page title and URL</td><td><code>Expect(Page).ToHaveTitleAsync(...)</code> · <code>Expect(Page).ToHaveURLAsync(...)</code></td></tr>
+<tr><td>Clicking and typing</td><td><code>ClickAsync</code> · <code>FillAsync</code> already auto-wait (attached, visible, enabled, stable)</td></tr>
+<tr><td>Navigation, network, state</td><td><code>Page.WaitForURLAsync</code> · <code>WaitForResponseAsync</code> · <code>loc.WaitForAsync()</code> · <code>WaitForFunctionAsync</code></td></tr>
+<tr><td>New tab / popup</td><td><code>Page.RunAndWaitForPopupAsync(...)</code></td></tr>
+<tr><td>Stable locators</td><td><code>GetByRole</code> · <code>GetByText</code> · <code>GetByLabel</code> · <code>GetByTestId</code>, not long CSS chains</td></tr>
+<tr><td>Don't hit external sites</td><td>Assert the <code>href</code> instead of opening it, or mock with <code>Context.RouteAsync</code></td></tr>
+</table>
+<p class="note"><b class="bad">Avoid as waits or assertions:</b> <code>Thread.Sleep</code> · <code>Task.Delay</code> · <code>CountAsync()</code> · <code>IsVisibleAsync()</code> · <code>InnerTextAsync()</code> · <code>TitleAsync()</code> · <code>Page.Url</code> right after an action. They read once and return.</p>
+
+<h2>2. Example from this project: Shows_all_products</h2>
+<div class="two">
+<div><div class="lbl bad">Flaky: fixed sleep, then a one-time read</div><pre class="pb">await Page.GotoAsync("catalogo.html");
+Thread.Sleep(800);
+
+var count = await Page
+  .Locator("#grid article.card").CountAsync();
+Assert.Equal(5, count);</pre></div>
+<div><div class="lbl good">Stable: retrying web-first assertion</div><pre class="pg">await Page.GotoAsync("catalogo.html");
+
+await Expect(Page.Locator("#grid article.card"))
+  .ToHaveCountAsync(5);</pre></div>
+</div>
+<p class="note">Why: the catalog loads after a random 0-1500 ms delay. <code>Expect</code> retries until the count matches (5 s default timeout), so it passes as soon as the cards render.</p>
+
+<h2>3. Running the tests in the Docker image</h2>
+<pre class="pd"># from the repo root, in PowerShell, with Docker Desktop running
+# one-time, if scripts are blocked:
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+
+./scripts/run.ps1                                              # one run
+./scripts/run.ps1 -Repeat 10                                   # 10 runs + green/red summary
+./scripts/run.ps1 -Filter "FullyQualifiedName~ProductList"     # one class
+./scripts/run.ps1 -Filter "FullyQualifiedName~Shows_all"       # one test
+
+# image: mcr.microsoft.com/playwright/dotnet:v1.49.0-noble
+# one green run proves nothing: always repeat before calling a flake fixed</pre>
+</main></body></html>
