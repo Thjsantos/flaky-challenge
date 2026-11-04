@@ -1,3 +1,5 @@
+using Tests.Pages;
+
 namespace Tests;
 
 public class ProductListTests : HefestoTest
@@ -8,9 +10,10 @@ public class ProductListTests : HefestoTest
     [Fact]
     public async Task Shows_all_products()
     {
-        await Page.GotoAsync("catalogo.html");
+        var catalog = new CatalogPage(Page);
+        await catalog.GotoAsync();
 
-        await Expect(Page.Locator("#grid article.card")).ToHaveCountAsync(5);
+        await Expect(catalog.Cards).ToHaveCountAsync(5);
     }
 
     // FIXED (example 2): was CountAsync() right after GotoAsync.
@@ -19,27 +22,30 @@ public class ProductListTests : HefestoTest
     [Fact]
     public async Task Anime_tab_shows_three_products()
     {
-        await Page.GotoAsync("catalogo.html#anime");
+        var catalog = new CatalogPage(Page);
+        await catalog.GotoAsync("anime");
 
-        await Expect(Page.Locator("#grid article.card")).ToHaveCountAsync(3);
+        await Expect(catalog.Cards).ToHaveCountAsync(3);
     }
 
     [Fact]
     public async Task Search_filters_by_name()
     {
-        await Page.GotoAsync("catalogo.html");
-        await Page.FillAsync("#q", "frieren");
+        var catalog = new CatalogPage(Page);
+        await catalog.GotoAsync();
+        await catalog.SearchAsync("frieren");
         await Task.Delay(200);
 
-        await Expect(Page.Locator("#grid article.card")).ToHaveCountAsync(1);
+        await Expect(catalog.Cards).ToHaveCountAsync(1);
     }
 
     [Fact]
     public async Task Search_without_match_shows_empty_message()
     {
-        await Page.GotoAsync("catalogo.html");
-        await Page.FillAsync("#q", "zzzz");
+        var catalog = new CatalogPage(Page);
+        await catalog.GotoAsync();
+        await catalog.SearchAsync("zzzz");
 
-        Assert.True(await Page.Locator("#empty").IsVisibleAsync());
+        Assert.True(await catalog.EmptyMessage.IsVisibleAsync());
     }
 }
